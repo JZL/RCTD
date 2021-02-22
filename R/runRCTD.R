@@ -75,10 +75,20 @@ process_beads_batch <- function(cell_type_info, gene_list, puck, class_df = NULL
 
     bead_chunk = parallel::splitIndices(dim(beads)[1], ncl=numCores)
 
+    # bead_chunk = parallel::splitIndices(c(63123, 63122, 63121), ncl=numCores)
+    # bead_chunk = list(c(63123), c(63122), c(63121))
+    # i=63123
+    # process_bead_doublet(cell_type_info, gene_list, puck@nUMI[i], beads[i,], class_df = class_df, constrain = constrain)
+
+
     results <- foreach::foreach(this_bead_chunk = bead_chunk, .export = environ, .packages = c("devtools", "RhpcBLASctl")) %dopar% {
       devtools::load_all("RCTD_tmp")
       omp_set_num_threads(3)
       blas_set_num_threads(3)
+    # results <- for(i in 1:200){
+      # for (f in list.files("/home/jlanglie/03_RCTD_Subtypes/RCTD/R", pattern="*.R", full.names = T)) {
+      #   source(f)
+      # }
       #if(i %% 100 == 0)
       #  cat(paste0("Finished sample: ",i,"\n"), file=out_file, append=TRUE)
 
@@ -140,10 +150,13 @@ decompose_batch <- function(nUMI, cell_type_means, beads, gene_list, constrain =
       numCores <- max_cores
     cl <- parallel::makeCluster(numCores,outfile="") #makeForkCluster
     doParallel::registerDoParallel(cl)
+    print("HIYA")
     environ = c('decompose_full','solveIRWLS.weights',
+    # environ = c('decompose_full','solveIRWLS.weights_global',
                 'solveOLS','solveWLS', 'Q_mat', 'K_val','X_vals','delta', 'blas_cores')
+    # solveIRWLS.weights_global = solveIRWLS.weights
+    # solveWLS_global = solveWLS
     #for(i in 1:100) {
-      #if(i %% 100 == 0)
 
     bead_chunk = parallel::splitIndices(dim(beads)[1], ncl=numCores)
     # weights <- foreach::foreach(i = 1:(dim(beads)[1]), .packages = c("quadprog", "devtools", "RhpcBLASctl"), .export = environ) %do% {
@@ -152,6 +165,11 @@ decompose_batch <- function(nUMI, cell_type_means, beads, gene_list, constrain =
                                 .export = environ) %dopar% {
       omp_set_num_threads(blas_cores)
       blas_set_num_threads(blas_cores)
+    # weights <- for(i in 1:20){
+      # for (f in list.files("/home/jlanglie/03_RCTD_Subtypes/RCTD/R", pattern="*.R", full.names = T)) {
+      #   source(f)
+      # }
+        #if(i %% 100 == 0)
       #  cat(paste0("Finished sample: ",i,"\n"), file=out_file, append=TRUE)
       devtools::load_all("RCTD_tmp")
 

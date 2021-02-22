@@ -128,7 +128,7 @@ plot_puck_continuous <- function(puck, barcodes, plot_val, ylimit = c(0,1),title
   plot_val <- pmax(pmin(plot_val, ylimit[2] -1e-8),ylimit[1] +1e-8)
   my_table$value = plot_val[barcodes]
   if(!is.null(ylimit))
-    sc <- ggplot2::scale_colour_gradientn(colors = my_pal, limits = ylimit)
+    sc <- ggplot2::scale_colour_gradientn(colors = my_pal, limits = ylimit, na.value = "#f0f0f0")
   else
     sc <- ggplot2::scale_colour_gradientn(colors = my_pal)
   plot <- ggplot2::ggplot(my_table, ggplot2::aes(x=x, y=y))

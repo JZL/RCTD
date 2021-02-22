@@ -63,6 +63,8 @@ create.RCTD <- function(spatialRNA, reference, max_cores = 8, test_mode = FALSE,
 run.RCTD <- function(RCTD, doublet_mode = T) {
    RCTD <- fitBulk(RCTD)
    RCTD <- choose_sigma_c(RCTD)
+
+   print("CHOSE SIGMA C!")
    RCTD <- fitPixels(RCTD, doublet_mode = doublet_mode)
 }
 

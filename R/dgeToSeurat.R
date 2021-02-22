@@ -16,8 +16,9 @@
 #' (per cell type).
 #' @export
 dgeToSeurat <- function(refdir) {
+  print("MODIFIED TO ALLOW GZ")
   #check for , at end of header of DGE
-  dge_file = file.path(refdir,"dge.csv")
+  dge_file = file.path(refdir,"dge.csv.gz")
   conn <- file(dge_file,open="r")
   lines <-readLines(conn)
   text_len = nchar(lines[1])
@@ -25,7 +26,7 @@ dgeToSeurat <- function(refdir) {
    lines[1] <- substr(lines[1],1,text_len-1)
   writeLines(lines,dge_file)
   close(conn)
-  dge <- readr::read_csv(file.path(refdir,"dge.csv"))
+  dge <- readr::read_csv(file.path(refdir,"dge.csv.gz"))
   gene_list <- dge$X1
   raw.data <- as(as(dge[,-1],"matrix"),"dgCMatrix")
   rownames(raw.data) <- gene_list
@@ -40,6 +41,27 @@ dgeToSeurat <- function(refdir) {
   meta_data$liger_ident_coarse = true_type_names
   reference = Seurat::CreateSeuratObject(raw.data, meta.data = meta_data)
   saveRDS(reference, paste(refdir,"SCRef.RDS",sep="/"))
+  dref <- create_downsampled_data(reference, refdir)
+  return(dref)
+}
+
+
+TenXToSeurat <- function(refdir) {
+  print("MODIFIED TO ALLOW GZ")
+  #check for , at end of header of DGE
+  raw.data <- Seurat::Read10X("03 Zeng Data/Pure")
+  meta_data = read.csv(file.path(refdir,"meta_data.csv"))
+  rownames(meta_data) = meta_data$barcode
+  meta_data$barcode = NULL
+  common_barcodes = intersect(colnames(raw.data), rownames(meta_data))
+  raw.data = raw.data[,common_barcodes]
+  meta_data = meta_data[common_barcodes, ]
+  cell_dict_file <- paste(refdir,"cell_type_dict.csv",sep="/")
+  true_type_names <- remap_celltypes(cell_dict_file, meta_data$cluster)
+  meta_data$liger_ident_coarse = true_type_names
+  reference = Seurat::CreateSeuratObject(raw.data, meta.data = meta_data)
+  # saveRDS(reference, paste(refdir,"SCRef.RDS",sep="/"))
+  saveRDS(reference, "03 Zeng Data/SCRef.RDS")
   dref <- create_downsampled_data(reference, refdir)
   return(dref)
 }

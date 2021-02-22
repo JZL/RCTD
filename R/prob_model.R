@@ -3,7 +3,7 @@
 #' Given a matrix, \code{Q_mat}, of P(y|x), under the Poisson-Lognormal model.
 #' Sets this as a global variable for fast computations in the future.
 #'
-#' @param Q_mat_loc Matrix of precomputed probabiliites, as previously computed by \code{\link{get_Q_mat}}
+#' @param Q_mat_loc Matrix of precomputed probabiliites, as previously computed by \code{\link{get_Q}}
 #' @param X_vals the x-values used for computing the likelihood functions.
 #' @export
 set_likelihood_vars <- function(Q_mat_loc, X_vals) {
@@ -67,8 +67,9 @@ calc_Q_par <- function(K, X_vals, sigma, big_params = T) {
     numCores <- MAX_CORES
   cl <- parallel::makeCluster(numCores,outfile="") #makeForkCluster
   doParallel::registerDoParallel(cl)
+  browse()
   environ = c('calc_Q_mat_one','get_Q','ht_pdf','ht_pdf_norm')
-  results <- foreach::foreach(i = 1:(K+3), .export = environ) %dopar% {
+  results <- foreach::foreach(i = 1:(K+3), .export = environ, .packages = c("devtools")) %dopar% {
     cat(paste0("calc_Q: Finished i: ",i,"\n"), file=out_file, append=TRUE)
     k = i-1;
     result = calc_Q_mat_one(sigma, X_vals, k, batch = 100, big_params = big_params)
@@ -142,6 +143,7 @@ get_der_fast <- function(S, B, gene_list, prediction, bulk_mode = F) {
     d2_vec <- d1_d2$d2_vec
   }
   grad = -d1_vec %*% S;
+  # takes multi cores for matmul
   hess_c <- -d2_vec %*% S_mat
   hess <- matrix(0,nrow = dim(S)[2], ncol = dim(S)[2])
   counter = 1
