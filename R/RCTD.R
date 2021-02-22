@@ -1,4 +1,6 @@
-
+test_jonah <- function(){
+   print("HIYA")
+}
 process_cell_type_info <- function(reference, CELL_MIN = 25) {
    print("Begin: process_cell_type_info")
    print(paste("init_RCTD: number of cells in reference:", dim(reference@assays$RNA@counts)[2]))
