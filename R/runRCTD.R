@@ -64,8 +64,9 @@ process_beads_batch <- function(cell_type_info, gene_list, puck, class_df = NULL
   #if (file.exists(out_file))
   #  file.remove(out_file)
   if(MAX_CORES > 1) {
-    numCores = parallel::detectCores();
-    if(parallel::detectCores() > MAX_CORES)
+    # detectCores can return NA?!?, see man page
+    numCores = max(parallel::detectCores(), 4, na.rm=T)
+    if(max(parallel::detectCores(), 4, na.rm=T) > MAX_CORES)
       numCores <- MAX_CORES
     cl <- parallel::makeCluster(numCores,outfile="") #makeForkCluster
     doParallel::registerDoParallel(cl)
@@ -134,8 +135,8 @@ decompose_batch <- function(nUMI, cell_type_means, beads, gene_list, constrain =
   #if (file.exists(out_file))
   #  file.remove(out_file)
   if(max_cores > 1) {
-    numCores = parallel::detectCores()
-    if(parallel::detectCores() > max_cores)
+    numCores = max(parallel::detectCores(), 4, na.rm=T)
+    if(max(parallel::detectCores(), 4, na.rm=T) > max_cores)
       numCores <- max_cores
     cl <- parallel::makeCluster(numCores,outfile="") #makeForkCluster
     doParallel::registerDoParallel(cl)

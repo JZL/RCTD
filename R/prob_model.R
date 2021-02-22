@@ -62,8 +62,8 @@ calc_Q_par <- function(K, X_vals, sigma, big_params = T) {
   out_file = "logs/calc_Q_log.txt"
   if (file.exists(out_file))
     file.remove(out_file)
-  numCores = parallel::detectCores(); MAX_CORES = 8
-  if(parallel::detectCores() > MAX_CORES)
+  numCores = max(parallel::detectCores(), 4, na.rm=T); MAX_CORES = 8
+  if(max(parallel::detectCores(), 4, na.rm=T) > MAX_CORES)
     numCores <- MAX_CORES
   cl <- parallel::makeCluster(numCores,outfile="") #makeForkCluster
   doParallel::registerDoParallel(cl)
