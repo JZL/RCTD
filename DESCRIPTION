@@ -1,7 +1,7 @@
 Package: RCTD
 Type: Package
 Title: Robust Cell Type Decomposition: decomposing RNA-seq mixtures into single cell types for spatial transcriptomics
-Version: 1.1.0
+Version: 1.2.0
 Author: Dylan Cable
 Maintainer: <dcable@mit.edu>
 Description: decomposing RNA-seq mixtures into single cell types for spatial transcriptomics
@@ -11,7 +11,6 @@ Encoding: UTF-8
 LazyData: true
 Imports: 
 	readr, 
-	Seurat,
 	ggplot2, 
 	pals, 
 	ggplot2,
@@ -23,7 +22,7 @@ Imports:
 	tibble,
 	dplyr,
 	reshape2
-RoxygenNote: 7.0.0
+RoxygenNote: 7.1.1
 Suggests: 
     knitr,
     rmarkdown

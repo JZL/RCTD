@@ -67,7 +67,7 @@ chooseSigma <- function(prediction, counts, Q_mat_all, X_vals, sigma) {
 #' @return Returns an \code{\linkS4class{RCTD}} with the estimated \code{sigma_c}.
 #' @export
 choose_sigma_c <- function(RCTD) {
-  puck = RCTD@spatialRNA; MIN_UMI = 300; sigma = 100
+  puck = RCTD@spatialRNA; MIN_UMI = RCTD@config$UMI_min_sigma; sigma = 100
   #Q_mat_all <- readRDS('/Users/dcable/Documents/MIT/Research/Rafalab/Projects/slideseq/Cell Demixing/ContentStructure/RCTD/Qmat/Q_mat_c.rds')
   Q1 <- readRDS(system.file("extdata", "Qmat/Q_mat_1.rds", package = "RCTD"))
   Q2 <- readRDS(system.file("extdata", "Qmat/Q_mat_2.rds", package = "RCTD"))
@@ -80,8 +80,6 @@ choose_sigma_c <- function(RCTD) {
   fit_ind = sample(names(puck@nUMI[puck@nUMI > MIN_UMI]), N_fit)
   beads = t(as.matrix(puck@counts[RCTD@internal_vars$gene_list_reg,fit_ind]))
   print(paste('chooseSigma: using initial Q_mat with sigma = ',sigma/100))
-  # BIG BUG, NEEDS RCTD not global myRCTD
-  blasCore = 2
   for(iter in 1:RCTD@config$N_epoch) {
     
     # browser()
