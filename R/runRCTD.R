@@ -64,20 +64,42 @@ process_beads_batch <- function(cell_type_info, gene_list, puck, class_df = NULL
   #if (file.exists(out_file))
   #  file.remove(out_file)
   if(MAX_CORES > 1) {
-    numCores = parallel::detectCores();
-    if(parallel::detectCores() > MAX_CORES)
+    # detectCores can return NA?!?, see man page
+    numCores = max(parallel::detectCores(), 4, na.rm=T)
+    if(max(parallel::detectCores(), 4, na.rm=T) > MAX_CORES)
       numCores <- MAX_CORES
     cl <- parallel::makeCluster(numCores,outfile="") #makeForkCluster
     doParallel::registerDoParallel(cl)
-    environ = c('decompose_full','decompose_sparse','solveIRWLS.weights','solveOLS','solveWLS','Q_mat','X_vals','K_val', 'delta')
-    results <- foreach::foreach(i = 1:(dim(beads)[1]), .export = environ) %dopar% { #.packages = c("quadprog"),
+
+    environ = c('Matrix', 'process_bead_doublet', 'decompose_full','decompose_sparse','solveIRWLS.weights','solveOLS','solveWLS','Q_mat','X_vals','K_val', 'delta')
+
+    bead_chunk = parallel::splitIndices(dim(beads)[1], ncl=numCores)
+
+    # bead_chunk = parallel::splitIndices(c(63123, 63122, 63121), ncl=numCores)
+    # bead_chunk = list(c(63123), c(63122), c(63121))
+    # i=63123
+    # process_bead_doublet(cell_type_info, gene_list, puck@nUMI[i], beads[i,], class_df = class_df, constrain = constrain)
+
+
+    results <- foreach::foreach(this_bead_chunk = bead_chunk, .export = environ, .packages = c("devtools", "RhpcBLASctl")) %dopar% {
+      devtools::load_all("RCTD_tmp")
+      omp_set_num_threads(3)
+      blas_set_num_threads(3)
+    # results <- for(i in 1:200){
+      # for (f in list.files("/home/jlanglie/03_RCTD_Subtypes/RCTD/R", pattern="*.R", full.names = T)) {
+      #   source(f)
+      # }
       #if(i %% 100 == 0)
       #  cat(paste0("Finished sample: ",i,"\n"), file=out_file, append=TRUE)
-      assign("Q_mat",Q_mat, envir = globalenv()); assign("X_vals",X_vals, envir = globalenv())
-      assign("K_val",K_val, envir = globalenv());
-      result = process_bead_doublet(cell_type_info, gene_list, puck@nUMI[i], beads[i,], class_df = class_df, constrain = constrain, MIN.CHANGE = MIN.CHANGE)
-      result
+      this_results <- foreach::foreach(i = this_bead_chunk) %do% {
+        assign("Q_mat",Q_mat, envir = globalenv()); assign("X_vals",X_vals, envir = globalenv())
+        assign("K_val",K_val, envir = globalenv());
+        result = process_bead_doublet(cell_type_info, gene_list, puck@nUMI[i], beads[i,], class_df = class_df, constrain = constrain, MIN.CHANGE=MIN.CHANGE)
+        result
+      }
+      this_results
     }
+    results %<>% flatten
     parallel::stopCluster(cl)
   } else {
     #not parallel
@@ -153,28 +175,53 @@ fitPixels <- function(RCTD, doublet_mode = "doublet") {
   }
 }
 
-decompose_batch <- function(nUMI, cell_type_means, beads, gene_list, constrain = T, OLS = F, max_cores = 8, MIN.CHANGE = 0.001) {
+decompose_batch <- function(nUMI, cell_type_means, beads, gene_list, constrain = T, OLS = F, max_cores = 8, MIN.CHANGE = 0.001, blas_cores = 1) {
   #out_file = "logs/decompose_batch_log.txt"
   #if (file.exists(out_file))
   #  file.remove(out_file)
   if(max_cores > 1) {
-    numCores = parallel::detectCores()
-    if(parallel::detectCores() > max_cores)
+    numCores = max(parallel::detectCores(), 4, na.rm=T)
+    if(max(parallel::detectCores(), 4, na.rm=T) > max_cores)
       numCores <- max_cores
     cl <- parallel::makeCluster(numCores,outfile="") #makeForkCluster
     doParallel::registerDoParallel(cl)
+    print("HIYA")
     environ = c('decompose_full','solveIRWLS.weights',
-                'solveOLS','solveWLS', 'Q_mat', 'K_val','X_vals','delta')
+    # environ = c('decompose_full','solveIRWLS.weights_global',
+                'solveOLS','solveWLS', 'Q_mat', 'K_val','X_vals','delta', 'blas_cores')
+    # solveIRWLS.weights_global = solveIRWLS.weights
+    # solveWLS_global = solveWLS
     #for(i in 1:100) {
-    weights <- foreach::foreach(i = 1:(dim(beads)[1]), .packages = c("quadprog"), .export = environ) %dopar% {
-      #if(i %% 100 == 0)
+
+    bead_chunk = parallel::splitIndices(dim(beads)[1], ncl=numCores)
+    # weights <- foreach::foreach(i = 1:(dim(beads)[1]), .packages = c("quadprog", "devtools", "RhpcBLASctl"), .export = environ) %do% {
+    weights <- foreach::foreach(this_bead_chunk = bead_chunk,
+                                .packages = c("quadprog", "devtools", "RhpcBLASctl"),
+                                .export = environ) %dopar% {
+      omp_set_num_threads(blas_cores)
+      blas_set_num_threads(blas_cores)
+    # weights <- for(i in 1:20){
+      # for (f in list.files("/home/jlanglie/03_RCTD_Subtypes/RCTD/R", pattern="*.R", full.names = T)) {
+      #   source(f)
+      # }
+        #if(i %% 100 == 0)
       #  cat(paste0("Finished sample: ",i,"\n"), file=out_file, append=TRUE)
-      assign("Q_mat",Q_mat, envir = globalenv()); assign("X_vals",X_vals, envir = globalenv())
-      assign("K_val",K_val, envir = globalenv());
-      decompose_full(data.matrix(cell_type_means[gene_list,]*nUMI[i]), nUMI[i], beads[i,], constrain = constrain, OLS = OLS, MIN_CHANGE = MIN.CHANGE)
+      devtools::load_all("RCTD_tmp")
+
+      this_output = foreach::foreach(i = this_bead_chunk) %do% {
+        assign("Q_mat",Q_mat, envir = globalenv()); assign("X_vals",X_vals, envir = globalenv())
+        assign("K_val",K_val, envir = globalenv());
+        decompose_full(data.matrix(cell_type_means[gene_list,]*nUMI[i]), nUMI[i], beads[i,], constrain = constrain, OLS = OLS, MIN_CHANGE = MIN.CHANGE)
+      }
+
+      this_output
     }
+    weights %<>% flatten
     parallel::stopCluster(cl)
   } else {
+    omp_set_num_threads(1)
+    blas_set_num_threads(1)
+
     weights <- list()
     for(i in 1:(dim(beads)[1])) {
       weights[[i]] <- decompose_full(data.matrix(cell_type_means[gene_list,]*nUMI[i]), nUMI[i], beads[i,], constrain = constrain, OLS = OLS, MIN_CHANGE = MIN.CHANGE)

@@ -81,9 +81,29 @@ choose_sigma_c <- function(RCTD) {
   beads = t(as.matrix(puck@counts[RCTD@internal_vars$gene_list_reg,fit_ind]))
   print(paste('chooseSigma: using initial Q_mat with sigma = ',sigma/100))
   for(iter in 1:RCTD@config$N_epoch) {
+    
+    # browser()
+    # 
+    # aa = bench::press(blasCore=seq(1,5,2), nCore=seq(3,12,3), {
+    # # aa = bench::press(blasCore=seq(5,6,1), nCore=seq(7,8,1), {
+    #   print(blasCore)
+    #   print(nCore)
+    #   bench::mark(
+    #     {
+    # 
+    #       RCTD@config$max_cores = nCore
+    
     set_likelihood_vars(Q_mat_all[[as.character(sigma)]], X_vals)
     #print(paste('chooseSigma: getting initial weights for #samples: ',N_fit))
-    results = decompose_batch(puck@nUMI[fit_ind], RCTD@cell_type_info$renorm[[1]], beads, RCTD@internal_vars$gene_list_reg, constrain = F, max_cores = RCTD@config$max_cores)
+    results = decompose_batch(puck@nUMI[fit_ind], RCTD@cell_type_info$renorm[[1]], beads, RCTD@internal_vars$gene_list_reg, constrain = F,
+                              max_cores = RCTD@config$max_cores, blas_cores=blasCore)
+    # 
+    #     })
+    # })
+    # saveRDS(aa, "~/03_RCTD_Subtypes/tmp_bench.RDS")
+    # View(aa)
+    
+    
     weights = Matrix(0, nrow = N_fit, ncol = RCTD@cell_type_info$renorm[[3]])
     rownames(weights) = fit_ind; colnames(weights) = RCTD@cell_type_info$renorm[[2]];
     for(i in 1:N_fit)
@@ -95,6 +115,7 @@ choose_sigma_c <- function(RCTD) {
     print(paste('Sigma value: ', sigma/100))
     if(sigma == sigma_prev)
       break
+    
   }
   RCTD@internal_vars$sigma <- sigma/100
   RCTD@internal_vars$Q_mat <- Q_mat_all[[as.character(sigma)]]

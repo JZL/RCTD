@@ -27,6 +27,7 @@ get_cell_type_info <- function(raw.data, cell_types, nUMI, cell_type_names = NUL
   cell_type = cell_type_names[1]
   cell_type_means <- data.frame(get_cell_mean(cell_type))
   colnames(cell_type_means)[1] = cell_type
+  # TODO can probably parallelize
   for (cell_type in cell_type_names[2:length(cell_type_names)]) {
     cell_type_means[cell_type] = get_cell_mean(cell_type)
   }
@@ -52,6 +53,7 @@ get_cell_type_info <- function(raw.data, cell_types, nUMI, cell_type_names = NUL
 #' @export
 get_norm_ref <- function(puck, cell_type_means, gene_list, proportions) {
   bulk_vec = rowSums(puck@counts)
+  # don't care about dividing by sum(...)/etc bc in the end, unconstrained regression so takes care of constant
   weight_avg = rowSums(sweep(cell_type_means[gene_list,],2,proportions / sum(proportions),'*'))
   target_means = bulk_vec[gene_list]/sum(puck@nUMI)
   cell_type_means_renorm = sweep(cell_type_means[gene_list,],1,weight_avg / target_means,'/')

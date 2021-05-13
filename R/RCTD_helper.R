@@ -6,6 +6,9 @@ decompose_sparse <- function(cell_type_profiles, nUMI, bead, type1=NULL, type2=N
     cell_types = c(type1,type2)
   else
     cell_types = custom_list
+  if(is.null(type1) && is.null(type2)){
+    return(0) # TODO wont work if NOT SCORE_MODE bc then need full list
+  }
   reg_data = data.matrix(cell_type_profiles[,cell_types])
   if(score_mode)
     n.iter = 25
@@ -33,6 +36,8 @@ check_pairs_type <- function(cell_type_profiles, bead, UMI_tot, score_mat, min_s
   candidates = rownames(score_mat)
   singlet_score = get_singlet_score(cell_type_profiles, bead, UMI_tot, my_type, constrain, MIN.CHANGE = MIN.CHANGE)
   all_pairs = T; all_pairs_class = !is.null(class_df)
+  other_class_scores = vector(mode="list")
+  breaking_class = c()
   other_class = my_type #other types present from this class
   for(i in 1:(length(candidates)-1)) {
     type1 = candidates[i]
@@ -44,8 +49,10 @@ check_pairs_type <- function(cell_type_profiles, bead, UMI_tot, score_mat, min_s
         if(!is.null(class_df)) {
           first_class = class_df[my_type,"class"] == class_df[type1,"class"]
           second_class = class_df[my_type,"class"] == class_df[type2,"class"]
-          if(!first_class && !second_class)
+          if(!first_class && !second_class){
+            breaking_class = c(breaking_class, type1, type2)
             all_pairs_class = F
+          }
           if(first_class && ! (type1 %in% other_class))
             other_class = c(other_class, type1)
           if(second_class && ! (type2 %in% other_class))
@@ -55,12 +62,12 @@ check_pairs_type <- function(cell_type_profiles, bead, UMI_tot, score_mat, min_s
     }
   }
   if(is.null(class_df))
-    all_pairs_class = all_class
+    all_pairs_class = all_class # if hit this bc is null, going to crash?
   if(all_pairs_class && !all_pairs && length(other_class) > 1) {
     for (type in other_class[2:length(other_class)])
       singlet_score = min(singlet_score, get_singlet_score(cell_type_profiles, bead, UMI_tot, type, constrain, MIN.CHANGE = MIN.CHANGE))
   }
-  return(list(all_pairs = all_pairs, all_pairs_class = all_pairs_class, singlet_score = singlet_score))
+  return(list(all_pairs = all_pairs, breaking_class=breaking_class, all_pairs_class = all_pairs_class, singlet_score = singlet_score, other_class=other_class,other_class_scores = other_class_scores))
 }
 
 #Decomposing a single bead via doublet search
@@ -86,6 +93,17 @@ process_bead_doublet <- function(cell_type_info, gene_list, UMI_tot, bead, class
   min_score = 0
   first_type = NULL; second_type = NULL
   first_class = F; second_class = F #indicates whether the first (resp second) refers to a class rather than a type
+
+  if(length(candidates)==0){
+    # needs factor spot_class
+    return(list(all_weights = all_weights, spot_class = factor("reject", c("reject", "singlet", "doublet_certain", "doublet_uncertain")),
+                first_type = NA, second_type = NA,
+                doublet_weights = -1, min_score = -1, singlet_score = -1,
+                conv_all = NA, conv_doublet = NA, score_mat = NA,
+                first_class = NA, second_class = NA, breaking_classes = NA))
+  }
+
+  if(length(candidates)!=0){
   for(i in 1:(length(candidates)-1)) {
     type1 = candidates[i]
     for(j in (i+1):length(candidates)) {
@@ -98,17 +116,55 @@ process_bead_doublet <- function(cell_type_info, gene_list, UMI_tot, bead, class
       }
     }
   }
-  type1_pres = check_pairs_type(cell_type_profiles, bead, UMI_tot, score_mat, min_score, first_type, class_df, QL_score_cutoff, constrain, MIN.CHANGE = MIN.CHANGE)
-  type2_pres = check_pairs_type(cell_type_profiles, bead, UMI_tot, score_mat, min_score, second_type, class_df, QL_score_cutoff, constrain, MIN.CHANGE = MIN.CHANGE)
+  }
+  # Focusing on doublet_uncertain, if hit `breaking_class` above that means that:
+  # - from above, our best type pair was (typeA, typeB)
+  # - because we're doublet_uncertain, only ONE of the types is uncertain. Let's say typeB is the uncertain one.
+  #     That means that EVERY pair below the cutoff is (typeA, ___) or (___, typeA) but that ...
+  # - there is a second pair (or more) e.g. (typeA, typeC) which does NOT have typeB in it
+  # - so if there is (typeA, typeC), (typeD, typeA) all below the cutoff, then we want the confusion clique to be
+  # (typeB, typeC, typeD). C,D are from breaking_classes, typeB is from second_type
+
+
+  breaking_classes = c()
+
+  type1_pres = check_pairs_type(cell_type_profiles, bead, UMI_tot, score_mat, min_score, first_type, class_df, QL_score_cutoff, constrain)
+  type2_pres = check_pairs_type(cell_type_profiles, bead, UMI_tot, score_mat, min_score, second_type, class_df, QL_score_cutoff, constrain)
   if(!type1_pres$all_pairs_class && !type2_pres$all_pairs_class) {
     spot_class <- "reject"
-    singlet_score = min_score + 2 * doublet_like_cutoff #arbitrary
+    singlet_score = min_score + 2 * doublet_like_cutoff #arbitrary to avoid classifying as singlet below
+    check_pairs_type(cell_type_profiles, bead, UMI_tot, score_mat, min_score, first_type, class_df, QL_score_cutoff, constrain)
+
+    breaking_classes = c("REJECT", "1 broken by", type1_pres$breaking_class, "2 broken by", type2_pres$breaking_class)
   }
   else if(type1_pres$all_pairs_class && !type2_pres$all_pairs_class) {
+    check_pairs_type(cell_type_profiles, bead, UMI_tot, score_mat, min_score, second_type, class_df, QL_score_cutoff, constrain)
+
+
+    # breaking_classes = c(breaking_classes, "FIRST TYPE", paste0("--", type1), paste0("++", first_type), type1_pres$breaking_class, "SECOND TYPE", paste0("--", type2), paste0("++", second_type), type2_pres$breaking_class)
+    # breaking_classes = c(breaking_classes, "SECOND TYPE", paste0("11", first_type), paste0("22", second_type), type2_pres$breaking_class, "|", type1_pres$breaking_class)
+
+    # So want to remove all of type1 (it's not confused, it's in ALL pairs) and add type2 in
+    # (breaking_class+second_type-first_type)
+    breaking_classes = setdiff(
+                            unique(c(type2_pres$breaking_class, second_type)),
+                            c(first_type))
+
     first_class <- !type1_pres$all_pairs
     singlet_score = type1_pres$singlet_score
     spot_class = "doublet_uncertain"
   } else if(!type1_pres$all_pairs_class && type2_pres$all_pairs_class) {
+    check_pairs_type(cell_type_profiles, bead, UMI_tot, score_mat, min_score, first_type, class_df, QL_score_cutoff, constrain)
+
+
+    # breaking_classes = c(breaking_classes, "FIRST TYPE", paste0("--", type1), paste0("++", first_type), type1_pres$breaking_class, "SECOND TYPE", paste0("--", type2), paste0("++", second_type), type2_pres$breaking_class)
+    breaking_classes = c(breaking_classes, "FIRST TYPE", paste0("11", first_type), paste0("22", second_type), type1_pres$breaking_class, "|", type2_pres$breaking_class)
+
+    # Here second_type is the confident class, it's everywhere. So add first_type (the broken one)+remove seocnd_type
+    breaking_classes = setdiff(
+      unique(c(type1_pres$breaking_class, first_type)),
+      c(second_type))
+
     first_class <- !type2_pres$all_pairs
     singlet_score = type2_pres$singlet_score
     temp = first_type; first_type = second_type; second_type = temp
@@ -130,7 +186,7 @@ process_bead_doublet <- function(cell_type_info, gene_list, UMI_tot, bead, class
   return(list(all_weights = all_weights, spot_class = spot_class, first_type = first_type, second_type = second_type,
               doublet_weights = doublet_weights, min_score = min_score, singlet_score = singlet_score,
               conv_all = conv_all, conv_doublet = conv_doublet, score_mat = score_mat,
-              first_class = first_class, second_class = second_class))
+              first_class = first_class, second_class = second_class, breaking_classes = breaking_classes))
 }
 
 #Decomposing a single bead via doublet search

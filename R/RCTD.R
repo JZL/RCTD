@@ -1,6 +1,7 @@
-
-
-process_cell_type_info <- function(reference, cell_type_names, CELL_MIN = 25) {
+test_jonah <- function(){
+   print("HIYA")
+}
+process_cell_type_info <- function(reference, CELL_MIN = 25) {
    print("Begin: process_cell_type_info")
    print(paste("process_cell_type_info: number of cells in reference:", dim(reference@counts)[2]))
    print(paste("process_cell_type_info: number of genes in reference:", dim(reference@counts)[1]))
@@ -80,6 +81,8 @@ run.RCTD <- function(RCTD, doublet_mode = "doublet") {
       stop(paste0("run.RCTD: doublet_mode=",doublet_mode, " is not a valid choice. Please set doublet_mode=doublet, multi, or full."))
    RCTD <- fitBulk(RCTD)
    RCTD <- choose_sigma_c(RCTD)
+
+   print("CHOSE SIGMA C!")
    RCTD <- fitPixels(RCTD, doublet_mode = doublet_mode)
 }
 

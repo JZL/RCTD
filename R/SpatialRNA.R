@@ -31,17 +31,43 @@ fake_coords <- function(counts) {
 #' @return Returns a \code{\linkS4class{SpatialRNA}} object containing the coordinates and counts
 #' from the input files
 #' @export
-read.VisiumSpatialRNA <- function (datadir) 
-{
-  coords <- readr::read_csv(file = paste(datadir, "spatial/tissue_positions_list.csv", 
-                                         sep = "/"), 
-                            col_names = c("barcodes", "in_tissue", "x", "y", "pxl_col_in_fullres", "pxl_row_in_fullres"))
+read.SpatialRNA <- function(datadir, count_file = "MappedDGEForR.csv") {
+  # for merfish, need character as first col, even if all numbers
+  coords <- readr::read_csv(file = paste(datadir,"BeadLocationsForR.csv",sep="/"))
+  print(count_file)
+  counts <- readr::read_csv(file = paste(datadir,count_file,sep="/"), progress = T)
+  colnames(coords)[2] = 'x' #renaming xcoord -> x
+  colnames(coords)[3] = 'y' #renaming ycoord -> y
+  counts = tibble::column_to_rownames(counts, var = colnames(counts)[1])
+  #rownames(counts) = counts[,1]
   coords = tibble::column_to_rownames(coords, var = "barcodes")
   counts <- Seurat::Read10X_h5(paste0(datadir, "/filtered_feature_bc_matrix.h5"))
   puck = SpatialRNA(coords[,c('x','y')], counts)
   restrict_puck(puck, colnames(puck@counts))
 }
 
+read.SpatialRNA.test <- function(datadir, count_file) {
+  print("CUSTOMIZED")
+  coords <- readr::read_csv(file = paste(datadir,"BeadLocationsForR.csv",sep="/"),
+                            col_types="cdd")
+  colnames(coords)[2] = 'x' #renaming xcoord -> x
+  colnames(coords)[3] = 'y' #renaming ycoord -> y
+  coords = tibble::column_to_rownames(coords, var = "barcodes")
+  coords$barcodes <- NULL
+
+  # """
+  # counts <- readr::read_csv(file = "04 Puck Data/01_Pure/MappedDGEForR.csv", progress = T)
+  # counts = tibble::column_to_rownames(counts, var = colnames(counts)[1])
+  # counts = counts[,2:dim(counts)[2]]
+  # counts_sparse = as(as(aa, "matrix"), "sparseMatrix")
+  # saveRDS(counts_sparse, "04 Puck Data/MappedDGEForR.sparse.RDS")
+  # """
+
+  mappedDGE_sparse = readRDS(count_file)
+  puck = SpatialRNA(coords, mappedDGE_sparse)
+  # TODO DON'T NEED, INTERSECT IS THE SAME?!?
+  restrict_puck(puck, colnames(puck@counts))
+}
 
 save.SpatialRNA <- function(puck, save.folder) {
   dir.create(save.folder)
@@ -170,9 +196,21 @@ restrict_counts <- function(puck, gene_list, UMI_thresh = 1, UMI_max = 20000) {
 #' @export
 restrict_puck <- function(puck, barcodes) {
   barcodes = intersect(colnames(puck@counts), barcodes)
-  puck@counts = puck@counts[,barcodes]
-  puck@nUMI = puck@nUMI[barcodes]
-  puck@coords = puck@coords[barcodes,]
+  
+  countsSubset = (colnames(puck@counts) %in% barcodes)
+  puck@counts = puck@counts[,countsSubset]
+  
+  if(length(puck@cell_labels) > 0){#check cell_labels non null
+    # TODO might not be right
+    labelsSubset = (puck@cell_labels %in% barcodes)
+    puck@cell_labels = puck@cell_labels[labelsSubset]
+  }
+    
+  nUMISubset = (names(puck@nUMI) %in% barcodes)
+  puck@nUMI = puck@nUMI[nUMISubset]
+  
+  coordsSubset = (rownames(puck@coords) %in% barcodes)
+  puck@coords = puck@coords[coordsSubset,]
   return(puck)
 }
 
